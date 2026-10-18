@@ -1,0 +1,92 @@
+name: Build Ratnakuhuk Android Release APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+    inputs:
+      sign_release:
+        description: 'Sign APK with release key'
+        required: false
+        default: 'true'
+        type: boolean
+
+jobs:
+  build-apk:
+    name: Build & Package Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Node Dependencies
+        run: npm ci || npm install
+
+      - name: Build Web Application
+        run: npm run build
+
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Generate Release Keystore if needed
+        run: |
+          if [ -z "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            echo "Generating self-signed release keystore for distribution..."
+            keytool -genkey -v -keystore android/app/release.keystore \
+              -alias ratnakuhuk \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass ratnakuhuk123 -keypass ratnakuhuk123 \
+              -dname "CN=Ratnakuhuk, OU=App, O=Ratnakuhuk, L=Dhaka, S=Dhaka, C=BD"
+          else
+            echo "Using configured GitHub Secret release keystore..."
+            echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+          fi
+
+      - name: Grant Execute Permission to Gradle
+        run: chmod +x android/gradlew
+
+      - name: Build Android Release APK with Gradle
+        env:
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD || 'ratnakuhuk123' }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS || 'ratnakuhuk' }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD || 'ratnakuhuk123' }}
+        run: |
+          cd android
+          ./gradlew assembleRelease
+
+      - name: Create Release APK Directory & Copy Output
+        run: |
+          mkdir -p "release apk"
+          # Find generated release APK and copy to exact requested destination
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -n "$APK_PATH" ]; then
+            cp "$APK_PATH" "release apk/Ratnakuhuk-release.apk"
+            echo "Successfully generated: release apk/Ratnakuhuk-release.apk"
+            ls -lh "release apk/Ratnakuhuk-release.apk"
+          else
+            echo "ERROR: Release APK not found in android/app/build/outputs/apk/release"
+            exit 1
+          fi
+
+      - name: Upload Release APK as Downloadable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ratnakuhuk-release-apk
+          path: release apk/Ratnakuhuk-release.apk
+          if-no-files-found: error
