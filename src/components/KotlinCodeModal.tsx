@@ -85,10 +85,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Install Node Dependencies
-        run: npm ci || npm install
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci || npm install
+          else
+            npm install
+          fi
 
       - name: Build Web Application
         run: npm run build
@@ -120,13 +124,21 @@ jobs:
           RELEASE_KEY_PASSWORD: 'ratnakuhuk123'
         run: |
           cd android
-          chmod +x ./gradlew
-          ./gradlew assembleRelease
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleRelease
+          else
+            gradle assembleRelease
+          fi
 
       - name: Copy Release APK to Destination Folder
         run: |
           mkdir -p "release apk"
-          cp android/app/build/outputs/apk/release/*.apk "release apk/Ratnakuhuk-release.apk"
+          APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | grep -i "release" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          fi
+          cp "$APK_PATH" "release apk/Ratnakuhuk-release.apk"
 
       - name: Upload Release APK as Downloadable Artifact
         uses: actions/upload-artifact@v4
@@ -134,24 +146,20 @@ jobs:
           name: Ratnakuhuk-release-apk
           path: release apk/Ratnakuhuk-release.apk`,
 
-    Capacitor: `import type { CapacitorConfig } from '@capacitor/cli';
-
-const config: CapacitorConfig = {
-  appId: 'com.ratnakuhuk.app',
-  appName: 'Ratnakuhuk',
-  webDir: 'dist',
-  server: {
-    androidScheme: 'https',
-    cleartext: true
+    Capacitor: `{
+  "appId": "com.ratnakuhuk.app",
+  "appName": "Ratnakuhuk",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
   },
-  android: {
-    allowMixedContent: true,
-    captureInput: true,
-    webContentsDebuggingEnabled: false
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
   }
-};
-
-export default config;`,
+}`,
 
     Gradle_App: `apply plugin: 'com.android.application'
 

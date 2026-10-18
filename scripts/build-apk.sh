@@ -33,8 +33,10 @@ cd "$PROJECT_ROOT/android"
 if [ -f "./gradlew" ]; then
   chmod +x ./gradlew
   ./gradlew assembleRelease
+elif command -v gradle &> /dev/null; then
+  gradle assembleRelease
 else
-  echo "Error: gradlew not found in android directory!"
+  echo "Error: Neither ./gradlew nor gradle found!"
   exit 1
 fi
 
@@ -42,7 +44,10 @@ echo "5. Moving Output APK to 'release apk/Ratnakuhuk-release.apk'..."
 cd "$PROJECT_ROOT"
 mkdir -p "release apk"
 
-APK_SOURCE=$(find "$PROJECT_ROOT/android/app/build/outputs/apk/release" -name "*.apk" | head -n 1)
+APK_SOURCE=$(find "$PROJECT_ROOT/android/app/build/outputs/apk" -name "*.apk" | grep -i "release" | head -n 1)
+if [ -z "$APK_SOURCE" ]; then
+  APK_SOURCE=$(find "$PROJECT_ROOT/android/app/build/outputs/apk" -name "*.apk" | head -n 1)
+fi
 
 if [ -f "$APK_SOURCE" ]; then
   cp "$APK_SOURCE" "release apk/Ratnakuhuk-release.apk"
@@ -53,6 +58,6 @@ if [ -f "$APK_SOURCE" ]; then
   ls -lh "$PROJECT_ROOT/release apk/Ratnakuhuk-release.apk"
   echo "=========================================="
 else
-  echo "Error: Could not locate generated APK in android/app/build/outputs/apk/release!"
+  echo "Error: Could not locate generated APK in android/app/build/outputs/apk!"
   exit 1
 fi
